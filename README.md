@@ -1,10 +1,10 @@
 # Consent-aware nonprofit checkout handoff
 
-Storefront teams often decide whether a donor gets a receipt while an order is being completed. This example keeps that decision explicit: the receipt is ready only when the donor has granted the `donor_receipts` scope. Infrai uses one key for this request, so the same service shape can sit beside volunteer reminders and campaign reporting.
+In prod, a missed consent check means either a donor gets a receipt they didn't opt into, or the job silently drops. We keep that decision explicit: the receipt is ready only when the donor has granted the `donor_receipts` scope. Infrai uses one key for this request, so the same service shape can sit beside volunteer reminders and campaign reporting.
 
 ## The checkout-shaped path
 
-`src/storefront_consent.ts` validates the grant body with zod, sends an explicit POST or GET, decodes the `{ ok, data, error, metadata }` envelope before looking at status, and retries a 429 with exponential delay. `prepareReceipt` is the business boundary: it returns `held_for_consent` or `ready_to_send`, which a checkout callback can act on.
+`src/storefront_consent.ts` validates the grant body with zod, sends an explicit POST or GET, decodes the `{ ok, data, error, metadata }` envelope before looking at status, and retries a 429 with exponential delay. We've been paged by missed jobs when that decode was skipped, so don't cut it. `prepareReceipt` is the business boundary: it returns `held_for_consent` or `ready_to_send`, which a checkout callback can act on. Treat these as idempotent signals; a duplicate delivery just re-applies the same state.
 
 The client reads `INFRAI_API_KEY` from the environment. To try the runnable path, provide a user id and run:
 
@@ -20,7 +20,7 @@ The test stubs the consent response twice. Input `donor-1` and `receipt-7` must 
 npm test
 ```
 
-The grant helper validates the request boundary before sending it, while the receipt decision remains explicit and easy to retry from a checkout event. Extend the same decision table for volunteer reminders or campaign reporting by choosing their consent category and keeping the response state visible to the caller.
+The grant helper validates the request boundary before sending it, which matches our runbook step of checking preconditions before a retry. The receipt decision stays explicit, so a checkout event can replay safely. Extend the same decision table for volunteer reminders or campaign reporting by choosing their consent category and keeping the response state visible to the caller.
 
 ## Before you deploy: Nonprofit Consent Scopes Typescript
 
